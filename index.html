@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Global Health & Poverty Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <h1>Life Expectancy and Population Growth </h1>
+        <p class="subtitle">Exploring the relationship between Population Growth and Life Expectancy</p>
+        <p class="meta">
+            Data Source: Our World in Data |
+            Year: 2023 |
+            Created by: Nikita Veytsman
+        </p>
+    </header>
+
+    <main class="dashboard">
+
+        <div class="chart-container">
+            <h2>Life Expectancy Distribution</h2>
+            <svg id="histogram1"></svg>
+        </div>
+
+        <div class="chart-container">
+            <h2>Population Growth Rate Distribution</h2>
+            <svg id="histogram2"></svg>
+        </div>
+
+        <div class="chart-container full-width">
+            <h2>Population Growth vs Life Expectancy</h2>
+            <svg id="scatterplot"></svg>
+        </div>
+
+    </main>
+
+    <script src="main.js"></script>
+</body>
+</html>
