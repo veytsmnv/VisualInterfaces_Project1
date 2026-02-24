@@ -225,8 +225,10 @@ function render(allCountries, dataByCode, world) {
 }
 
 // Histogram
-function drawHistogram(svg, values, { xLabel, yLabel, title }) {
+function drawHistogram(svg, values, { xLabel, yLabel, title, metricKey }) {
   svg.selectAll("*").remove();
+
+  const fmt = metricKey ? METRICS[metricKey].fmt : (v) => v.toFixed(2);
 
   const g = svg
     .append("g")
@@ -263,8 +265,9 @@ function drawHistogram(svg, values, { xLabel, yLabel, title }) {
         .style("opacity", 1)
         .html(
           `
-          <div><strong>Range:</strong> ${d.x0.toFixed(1)} to ${d.x1.toFixed(1)}</div>
-          <div><strong>Countries:</strong> ${d.length}</div>
+  <div><strong>${xLabel}</strong></div>
+  <div><strong>Range:</strong> ${fmt(d.x0)} to ${fmt(d.x1)}</div>
+  <div><strong>Countries:</strong> ${d.length}</div>
         `,
         )
         .style("left", `${event.pageX + 12}px`)
@@ -347,20 +350,26 @@ function drawScatter(svg, data, { xLabel, yLabel, title }) {
     .attr("r", 3.2)
     .attr("fill", "#4682B4")
     .attr("opacity", 0.75)
+    .on("mouseenter", function () {
+      d3.select(this).attr("r", 6).attr("opacity", 1);
+    })
+    .on("mouseleave", function () {
+      d3.select(this).attr("r", 3.2).attr("opacity", 0.75);
+      tooltip.style("opacity", 0);
+    })
     .on("mousemove", (event, d) => {
       tooltip
         .style("opacity", 1)
         .html(
           `
-          <div><strong>${d.country}</strong> (${d.code})</div>
-          <div>${METRICS[d.xKey].label}: ${METRICS[d.xKey].fmt(d.x)}</div>
-          <div>${METRICS[d.yKey].label}: ${METRICS[d.yKey].fmt(d.y)}</div>
-        `,
+      <div><strong>${d.country}</strong> (${d.code})</div>
+      <div>${METRICS[d.xKey].label}: ${METRICS[d.xKey].fmt(d.x)}</div>
+      <div>${METRICS[d.yKey].label}: ${METRICS[d.yKey].fmt(d.y)}</div>
+    `,
         )
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
-    })
-    .on("mouseleave", () => tooltip.style("opacity", 0));
+    });
 
   // Title
   svg
@@ -428,6 +437,13 @@ function updateMap(world, dataByCode, metric) {
     })
     .attr("stroke", "#ffffff")
     .attr("stroke-width", 0.6)
+    .on("mouseenter", function () {
+      d3.select(this).attr("stroke", "#222").attr("stroke-width", 1.2);
+    })
+    .on("mouseleave", function () {
+      d3.select(this).attr("stroke", "#ffffff").attr("stroke-width", 0.6);
+      tooltip.style("opacity", 0);
+    })
     .on("mousemove", (event, f) => {
       const row = dataByCode.get(f.id);
       const name = f.properties?.name || "Unknown";
@@ -440,14 +456,13 @@ function updateMap(world, dataByCode, metric) {
         .style("opacity", 1)
         .html(
           `
-          <div><strong>${name}</strong> (${f.id || "—"})</div>
-          <div>${label}: ${valueText}</div>
-        `,
+      <div><strong>${name}</strong> (${f.id || "—"})</div>
+      <div>${label}: ${valueText}</div>
+    `,
         )
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
-    })
-    .on("mouseleave", () => tooltip.style("opacity", 0));
+    });
 
   renderLegend(metric, scaleInfo);
 }
