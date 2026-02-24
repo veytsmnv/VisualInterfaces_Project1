@@ -7,11 +7,46 @@ const margin = { top: 30, right: 25, bottom: 50, left: 60 };
 const innerW = chartW - margin.left - margin.right;
 const innerH = chartH - margin.top - margin.bottom;
 
-const mapH = 420;
+const mapH = 650;
 const svgMap = d3.select("#choropleth");
 const mapTitle = d3.select("#mapTitle");
 const metricSelect = d3.select("#metricSelect");
+const metricASelect = d3.select("#metricA");
+const metricBSelect = d3.select("#metricB");
+
+const hist1Title = d3.select("#hist1Title");
+const hist2Title = d3.select("#hist2Title");
+const scatTitle = d3.select("#scatTitle");
+
 const legendDiv = d3.select("#legend");
+
+const METRICS = {
+  growth: {
+    label: "Population growth rate (%)",
+    type: "diverging",
+    fmt: (v) => `${v.toFixed(2)}%`,
+  },
+  lifeExp: {
+    label: "Life expectancy (years)",
+    type: "sequential",
+    fmt: (v) => `${v.toFixed(1)} yrs`,
+  },
+  gdp: {
+    label: "GDP per capita",
+    type: "sequential",
+    fmt: (v) => `${Math.round(v).toLocaleString()}`,
+  },
+  co2: {
+    label: "CO₂ emissions per capita",
+    type: "sequential",
+    fmt: (v) => `${v.toFixed(2)}`,
+  },
+  childMort: {
+    label: "Under-five mortality rate",
+    type: "sequential",
+    fmt: (v) => `${v.toFixed(1)}`,
+  },
+};
 
 // Select SVGs and set size
 const svgHist1 = d3
@@ -45,87 +80,149 @@ Promise.all([
     entity: d.Entity,
     code: d.Code,
     year: +d.Year,
-    lifeExp: d["Life expectancy"] === "" ? NaN : +d["Life expectancy"],
+    value: d["Life expectancy"] === "" ? NaN : +d["Life expectancy"],
   })),
   d3.csv("data/population-growth-rates.csv", (d) => ({
     entity: d.Entity,
     code: d.Code,
     year: +d.Year,
-    growth: d["Growth rate, total"] === "" ? NaN : +d["Growth rate, total"],
+    value: d["Growth rate, total"] === "" ? NaN : +d["Growth rate, total"],
+  })),
+  d3.csv("data/gdp-per-capita-maddison-project-database.csv", (d) => ({
+    entity: d.Entity,
+    code: d.Code,
+    year: +d.Year,
+    value: d["GDP per capita"] === "" ? NaN : +d["GDP per capita"],
+  })),
+  d3.csv("data/co-emissions-per-capita.csv", (d) => ({
+    entity: d.Entity,
+    code: d.Code,
+    year: +d.Year,
+    value:
+      d["CO₂ emissions per capita"] === ""
+        ? NaN
+        : +d["CO₂ emissions per capita"],
+  })),
+  d3.csv("data/child-mortality.csv", (d) => ({
+    entity: d.Entity,
+    code: d.Code,
+    year: +d.Year,
+    value:
+      d["Under-five mortality rate (selected)"] === ""
+        ? NaN
+        : +d["Under-five mortality rate (selected)"],
   })),
   d3.json("data/world.geojson"),
 ])
-  .then(([lifeData, growthData, world]) => {
-    const lifeYear = lifeData.filter(
-      (d) =>
-        d.year === YEAR &&
-        d.code &&
-        d.code.length === 3 &&
-        Number.isFinite(d.lifeExp),
-    );
+  .then(([lifeRows, growthRows, gdpRows, co2Rows, mortRows, world]) => {
+    const countryMap = new Map();
 
-    const growthYear = growthData.filter(
-      (d) =>
-        d.year === YEAR &&
-        d.code &&
-        d.code.length === 3 &&
-        Number.isFinite(d.growth),
-    );
+    function upsert(rows, key) {
+      rows.forEach((r) => {
+        if (
+          r.year !== YEAR ||
+          !r.code ||
+          r.code.length !== 3 ||
+          !Number.isFinite(r.value)
+        )
+          return;
+        if (!countryMap.has(r.code)) {
+          countryMap.set(r.code, {
+            code: r.code,
+            country: r.entity,
+            year: YEAR,
+            metrics: {},
+          });
+        }
+        countryMap.get(r.code).metrics[key] = r.value;
+      });
+    }
 
-    const growthByCode = new Map(growthYear.map((d) => [d.code, d]));
+    upsert(lifeRows, "lifeExp");
+    upsert(growthRows, "growth");
+    upsert(gdpRows, "gdp");
+    upsert(co2Rows, "co2");
+    upsert(mortRows, "childMort");
 
-    const merged = lifeYear
-      .map((d) => {
-        const g = growthByCode.get(d.code);
-        if (!g) return null;
-        return {
-          country: d.entity,
-          code: d.code,
-          year: YEAR,
-          lifeExp: d.lifeExp,
-          growth: g.growth,
-        };
-      })
-      .filter((d) => d !== null);
-
-    const dataByCode = new Map(merged.map((d) => [d.code, d]));
+    const allCountries = Array.from(countryMap.values());
+    const dataByCode = new Map(allCountries.map((d) => [d.code, d]));
 
     initMap(world);
-    metricSelect.on("change", () => {
-      updateMap(world, dataByCode, metricSelect.property("value"));
+
+    window.addEventListener("resize", () => {
+      initMap();
+      render(allCountries, dataByCode, world);
     });
-    updateMap(world, dataByCode, metricSelect.property("value"));
 
-    // Level 1 charts
-    drawHistogram(
-      svgHist1,
-      merged.map((d) => d.lifeExp),
-      {
-        xLabel: "Life expectancy (years)",
-        yLabel: "Countries",
-        title: `Life Expectancy Distribution (${YEAR})`,
-      },
-    );
+    function rerender() {
+      render(allCountries, dataByCode, world);
+    }
 
-    drawHistogram(
-      svgHist2,
-      merged.map((d) => d.growth),
-      {
-        xLabel: "Population growth rate (%)",
-        yLabel: "Countries",
-        title: `Population Growth Distribution (${YEAR})`,
-      },
-    );
+    metricSelect.on("change", rerender);
+    metricASelect.on("change", rerender);
+    metricBSelect.on("change", rerender);
 
-    drawScatter(svgScat, merged, {
-      xLabel: "Population growth rate (%)",
-      yLabel: "Life expectancy (years)",
-      title: `Life Expectancy vs Population Growth (${YEAR})`,
-    });
+    render(allCountries, dataByCode, world);
   })
-  .catch((err) => {
-    console.error("Data load error:", err);
-  });
+  .catch((err) => console.error("Data load error:", err));
+
+function render(allCountries, dataByCode, world) {
+  const mapMetric = metricSelect.property("value");
+  const metricA = metricASelect.property("value");
+  const metricB = metricBSelect.property("value");
+
+  const filtered = allCountries.filter(
+    (d) =>
+      Number.isFinite(d.metrics[metricA]) &&
+      Number.isFinite(d.metrics[metricB]),
+  );
+
+  const aLabel = METRICS[metricA].label;
+  const bLabel = METRICS[metricB].label;
+
+  if (!hist1Title.empty()) hist1Title.text(`${aLabel} Distribution`);
+  if (!hist2Title.empty()) hist2Title.text(`${bLabel} Distribution`);
+  if (!scatTitle.empty()) scatTitle.text(`${bLabel} vs ${aLabel}`);
+
+  drawHistogram(
+    svgHist1,
+    filtered.map((d) => d.metrics[metricA]),
+    {
+      xLabel: aLabel,
+      yLabel: "Countries",
+      title: `${aLabel} Distribution (${YEAR})`,
+    },
+  );
+
+  drawHistogram(
+    svgHist2,
+    filtered.map((d) => d.metrics[metricB]),
+    {
+      xLabel: bLabel,
+      yLabel: "Countries",
+      title: `${bLabel} Distribution (${YEAR})`,
+    },
+  );
+
+  drawScatter(
+    svgScat,
+    filtered.map((d) => ({
+      country: d.country,
+      code: d.code,
+      x: d.metrics[metricA],
+      y: d.metrics[metricB],
+      xKey: metricA,
+      yKey: metricB,
+    })),
+    {
+      xLabel: aLabel,
+      yLabel: bLabel,
+      title: `${bLabel} vs ${aLabel} (${YEAR})`,
+    },
+  );
+
+  updateMap(world, dataByCode, mapMetric);
+}
 
 // Histogram
 function drawHistogram(svg, values, { xLabel, yLabel, title }) {
@@ -226,13 +323,13 @@ function drawScatter(svg, data, { xLabel, yLabel, title }) {
 
   const x = d3
     .scaleLinear()
-    .domain(d3.extent(data, (d) => d.growth))
+    .domain(d3.extent(data, (d) => d.x))
     .nice()
     .range([0, w]);
 
   const y = d3
     .scaleLinear()
-    .domain(d3.extent(data, (d) => d.lifeExp))
+    .domain(d3.extent(data, (d) => d.y))
     .nice()
     .range([h, 0]);
 
@@ -245,8 +342,8 @@ function drawScatter(svg, data, { xLabel, yLabel, title }) {
   g.selectAll("circle")
     .data(data)
     .join("circle")
-    .attr("cx", (d) => x(d.growth))
-    .attr("cy", (d) => y(d.lifeExp))
+    .attr("cx", (d) => x(d.x))
+    .attr("cy", (d) => y(d.y))
     .attr("r", 3.2)
     .attr("fill", "#4682B4")
     .attr("opacity", 0.75)
@@ -256,8 +353,8 @@ function drawScatter(svg, data, { xLabel, yLabel, title }) {
         .html(
           `
           <div><strong>${d.country}</strong> (${d.code})</div>
-          <div>Growth: ${d.growth.toFixed(2)}%</div>
-          <div>Life exp: ${d.lifeExp.toFixed(1)} yrs</div>
+          <div>${METRICS[d.xKey].label}: ${METRICS[d.xKey].fmt(d.x)}</div>
+          <div>${METRICS[d.yKey].label}: ${METRICS[d.yKey].fmt(d.y)}</div>
         `,
         )
         .style("left", `${event.pageX + 12}px`)
@@ -293,9 +390,9 @@ function drawScatter(svg, data, { xLabel, yLabel, title }) {
     .text(yLabel);
 }
 // Choropleth map
-function initMap(world) {
-  const width = svgMap.node().getBoundingClientRect().width || 1000;
-  svgMap.attr("width", width).attr("height", mapH);
+function initMap() {
+  const w = svgMap.node().parentNode.getBoundingClientRect().width;
+  svgMap.attr("width", w).attr("height", mapH);
 }
 
 function updateMap(world, dataByCode, metric) {
@@ -304,31 +401,29 @@ function updateMap(world, dataByCode, metric) {
 
   svgMap.selectAll("*").remove();
 
-  const projection = d3.geoNaturalEarth1()
-    .fitSize([width, height], world);
+  const projection = d3.geoNaturalEarth1();
+  projection.fitSize([width, height], world);
 
   const path = d3.geoPath(projection);
 
   const values = world.features
-    .map(f => dataByCode.get(f.id)?.[metric])
-    .filter(v => Number.isFinite(v));
+    .map((f) => dataByCode.get(f.id)?.metrics?.[metric])
+    .filter((v) => Number.isFinite(v));
 
   const domain = d3.extent(values);
   const scaleInfo = getColorScale(metric, domain);
 
-  mapTitle.text(metric === "growth"
-    ? `Population Growth Rate Map (${YEAR})`
-    : `Life Expectancy Map (${YEAR})`
-  );
+  mapTitle.text(`${METRICS[metric].label} Map (${YEAR})`);
 
-  svgMap.append("g")
+  svgMap
+    .append("g")
     .selectAll("path")
     .data(world.features)
     .join("path")
     .attr("d", path)
-    .attr("fill", f => {
+    .attr("fill", (f) => {
       const row = dataByCode.get(f.id);
-      const v = row ? row[metric] : NaN;
+      const v = row ? row.metrics?.[metric] : NaN;
       return Number.isFinite(v) ? scaleInfo.color(v) : "#e9e9e9";
     })
     .attr("stroke", "#ffffff")
@@ -336,20 +431,19 @@ function updateMap(world, dataByCode, metric) {
     .on("mousemove", (event, f) => {
       const row = dataByCode.get(f.id);
       const name = f.properties?.name || "Unknown";
-      const v = row ? row[metric] : NaN;
+      const v = row ? row.metrics?.[metric] : NaN;
 
-      const label = metric === "growth" ? "Growth" : "Life expectancy";
-      const unit = metric === "growth" ? "%" : "yrs";
-      const valueText = Number.isFinite(v)
-        ? `${v.toFixed(metric === "growth" ? 2 : 1)} ${unit}`
-        : "No data";
+      const label = METRICS[metric].label;
+      const valueText = Number.isFinite(v) ? METRICS[metric].fmt(v) : "No data";
 
       tooltip
         .style("opacity", 1)
-        .html(`
+        .html(
+          `
           <div><strong>${name}</strong> (${f.id || "—"})</div>
           <div>${label}: ${valueText}</div>
-        `)
+        `,
+        )
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
@@ -360,14 +454,17 @@ function updateMap(world, dataByCode, metric) {
 
 function getColorScale(metric, domain) {
   if (metric === "growth") {
-    const maxAbs = Math.max(Math.abs(domain[0] || 0), Math.abs(domain[1] || 0)) || 1;
-    const color = d3.scaleSequential()
+    const maxAbs =
+      Math.max(Math.abs(domain[0] || 0), Math.abs(domain[1] || 0)) || 1;
+    const color = d3
+      .scaleSequential()
       .domain([maxAbs, -maxAbs])
       .interpolator(d3.interpolateRdBu);
     return { color, domain: [-maxAbs, maxAbs] };
   }
 
-  const color = d3.scaleSequential()
+  const color = d3
+    .scaleSequential()
     .domain(domain)
     .interpolator(d3.interpolateViridis);
 
@@ -377,15 +474,13 @@ function getColorScale(metric, domain) {
 function renderLegend(metric, scaleInfo) {
   legendDiv.html("");
 
-  const label = metric === "growth"
-    ? "Population growth rate (%)"
-    : "Life expectancy (years)";
+  const label = METRICS[metric].label;
 
   const [d0, d1] = scaleInfo.domain;
 
   const n = 80;
-  const stops = d3.range(n).map(i => i / (n - 1));
-  const colors = stops.map(t => {
+  const stops = d3.range(n).map((i) => i / (n - 1));
+  const colors = stops.map((t) => {
     const v = d0 + t * (d1 - d0);
     return scaleInfo.color(v);
   });
@@ -393,7 +488,11 @@ function renderLegend(metric, scaleInfo) {
   const gradient = `linear-gradient(to right, ${colors.join(",")})`;
 
   const row = legendDiv.append("div").attr("class", "legend-row");
-  row.append("div").style("min-width", "190px").style("color", "#555").text(label);
+  row
+    .append("div")
+    .style("min-width", "190px")
+    .style("color", "#555")
+    .text(label);
   row.append("div").attr("class", "legend-bar").style("background", gradient);
 
   const labels = legendDiv.append("div").attr("class", "legend-labels");
@@ -404,5 +503,5 @@ function renderLegend(metric, scaleInfo) {
 
 function formatLegendValue(metric, v) {
   if (!Number.isFinite(v)) return "—";
-  return metric === "growth" ? `${v.toFixed(2)}%` : `${v.toFixed(1)} yrs`;
+  return METRICS[metric].fmt(v);
 }

@@ -16,24 +16,46 @@
         Data Source: Our World in Data | Year: 2023 | Created by: Nikita
         Veytsman
       </p>
+      <div class="controls-row">
+        <div class="controls">
+          <label for="metricA">Metric A:</label>
+          <select id="metricA">
+            <option value="lifeExp" selected>Life expectancy (years)</option>
+            <option value="growth">Population growth rate (%)</option>
+            <option value="gdp">GDP per capita</option>
+            <option value="co2">CO₂ emissions per capita</option>
+            <option value="childMort">Under-five mortality rate</option>
+          </select>
+        </div>
+
+        <div class="controls">
+          <label for="metricB">Metric B:</label>
+          <select id="metricB">
+            <option value="growth" selected>Population growth rate (%)</option>
+            <option value="lifeExp">Life expectancy (years)</option>
+            <option value="gdp">GDP per capita</option>
+            <option value="co2">CO₂ emissions per capita</option>
+            <option value="childMort">Under-five mortality rate</option>
+          </select>
+        </div>
+      </div>
     </header>
 
     <main class="dashboard">
       <div class="chart-container">
-        <h2>Life Expectancy Distribution</h2>
+        <h2 id="hist1Title">Life Expectancy Distribution</h2>
         <svg id="histogram1"></svg>
       </div>
 
       <div class="chart-container">
-        <h2>Population Growth Rate Distribution</h2>
+        <h2 id="hist2Title">Population Growth Rate Distribution</h2>
         <svg id="histogram2"></svg>
       </div>
 
       <div class="chart-container full-width">
-        <h2>Population Growth vs Life Expectancy</h2>
+        <h2 id="scatTitle">Population Growth vs Life Expectancy</h2>
         <svg id="scatterplot"></svg>
       </div>
-
       <div class="chart-container full-width">
         <div class="chart-header">
           <h2 id="mapTitle">World Map (2023)</h2>
@@ -42,6 +64,9 @@
             <select id="metricSelect">
               <option value="growth">Population growth rate (%)</option>
               <option value="lifeExp">Life expectancy (years)</option>
+              <option value="gdp">GDP per capita</option>
+              <option value="co2">CO₂ emissions per capita</option>
+              <option value="childMort">Under-five mortality rate</option>
             </select>
           </div>
         </div>
