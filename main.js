@@ -1,4 +1,4 @@
-const YEAR = 2023;
+const YEAR = 2022;
 
 const chartW = 520;
 const chartH = 320;
